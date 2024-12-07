@@ -23,6 +23,7 @@ jobs:
 
       - name: Compare versions
         run: |
+          cd ${{matrix.repo}}
           CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
           if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
             echo "New version available: $LATEST_VERSION"
