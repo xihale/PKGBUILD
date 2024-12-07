@@ -14,14 +14,15 @@ jobs:
       matrix:
         repo: [v2rayn-bin]
     steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Install dependencies
-        run: |
-          git submodule update --init --recursive
+          submodules: recursive
 
       - name: Get latest version
         id: get-latest-version
