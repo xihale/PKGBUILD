@@ -43,7 +43,7 @@ jobs:
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add PKGBUILD
             git commit -m "Update v2rayN to $LATEST_VERSION"
-            git push origin master
+            git push origin ${GITHUB_REF##*/}
           else
             echo "No new version available."
           fi
