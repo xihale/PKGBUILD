@@ -1,0 +1,44 @@
+name: Update v2rayN version
+
+on:
+  schedule:
+    - cron: 0 0 * * *  # 每天凌晨0点运行一次
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Get latest version and download URLs
+        run: |
+          RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
+          LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
+
+      - name: Compare versions
+        run: |
+          CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
+          if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "New version available: $LATEST_VERSION"
+            echo "Updating PKGBUILD..."
+            sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
+            echo "Generating sha256sums..."
+            X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
+            X86_64_SHA256SUM=$(curl -s "$X86_64_URL" | sha256sum | cut -d ' ' -f 1)
+            ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
+            ARM64_SHA256SUM="SKIP"
+            sed -i "/^source_x86_64=/a source_x86_64=($X86_64_URL)" PKGBUILD
+            sed -i "/^sha256sums_x86_64=/a sha256sums_x86_64=($X86_64_SHA256SUM)" PKGBUILD
+            sed -i "/^source_arm64=/a source_arm64=($ARM64_URL)" PKGBUILD
+            sed -i "/^sha256sums_arm64=/a sha256sums_arm64=($ARM64_SHA256SUM)" PKGBUILD
+            echo "Committing changes..."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add PKGBUILD
+            git commit -m "update to $LATEST_VERSION"
+            git push origin master
+          else
+            echo "No new version available."
+          fi
