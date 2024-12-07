@@ -1,6 +1,7 @@
 name: Update v2rayN version
 
 on:
+  push:
   schedule:
     - cron: 0 0 * * *  # 每天凌晨0点运行一次
 
