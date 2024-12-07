@@ -2,6 +2,10 @@
 name: Publish packages to AUR
 on:
   push:
+    branches:
+      - main
+    actors:
+      - github-actions[bot]
   workflow_dispatch:
 
 jobs:
