@@ -1,12 +1,12 @@
-name: Update v2rayN version
+name: Update v2rayN version and publish to AUR
 
 on:
   schedule:
-    - cron: 0 0 * * *  # 每天凌晨0点运行一次
+    - cron: 0 0 * * * # 每天凌晨0点运行一次
   workflow_dispatch:
 
 jobs:
-  update:
+  update-and-publish:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -15,35 +15,48 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Get latest version and download URLs
+      - name: Get latest version
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
           echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
 
       - name: update versions
+        if: $(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-) != ${{env.LATEST_VERSION}}
         run: |
           cd ${{matrix.repo}}
-          CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
-          if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
-            echo "New version available: $LATEST_VERSION"
-            echo "Updating PKGBUILD..."
-            sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
-            echo "Generating sha256sums..."
-            X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
-            curl -O "$X86_64_URL"
-            X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
-            ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
-            curl -O "$ARM64_URL"
-            ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
-            sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
-            sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
-            echo "Committing changes..."
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add PKGBUILD
-            git commit -m "update ${{matrix.repo}} to $LATEST_VERSION"
-            git push origin ${GITHUB_REF##*/}
-          else
-            echo "No new version available."
-          fi
+          echo "New version available: $LATEST_VERSION"
+          echo "Updating PKGBUILD..."
+          sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
+          echo "Generating sha256sums..."
+          X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
+          curl -O "$X86_64_URL"
+          X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
+          ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
+          curl -O "$ARM64_URL"
+          ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
+          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
+          sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
+          echo "Committing changes..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD
+          git commit -m "update ${{matrix.repo}} to $LATEST_VERSION"
+          git push origin ${GITHUB_REF##*/}
+
+      - name: Publish AUR package
+        if: $(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-) != ${{env.LATEST_VERSION}}
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: ${{matrix.repo}}
+          test: false
+          updpkgsums: false
+          commit_username: "github-actions[bot]"
+          commit_email: "github-actions[bot]@users.noreply.github.com"
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "git actions auto update"
+          allow_empty_commits: false
+          pkgbuild: ${{matrix.repo}}/PKGBUILD
+          assets: |
+            ${{matrix.repo}}/v2rayN-bin.desktop
+            ${{matrix.repo}}/v2rayN.png
