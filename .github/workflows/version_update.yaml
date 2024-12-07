@@ -7,6 +7,9 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: [v2rayn-bin]
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -37,7 +40,7 @@ jobs:
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add PKGBUILD
-            git commit -m "update to $LATEST_VERSION"
+            git commit -m "Update v2rayN to $LATEST_VERSION"
             git push origin master
           else
             echo "No new version available."
