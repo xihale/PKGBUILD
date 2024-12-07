@@ -16,41 +16,57 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Get latest version
+        id: get-latest-version
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
           echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
 
-      - name: update versions
-        if: $(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-) != ${{env.LATEST_VERSION}}
+      - name: Check if update is needed
+        id: check-update
         run: |
-          cd ${{matrix.repo}}
-          echo "New version available: $LATEST_VERSION"
-          echo "Updating PKGBUILD..."
+          CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
+          echo "CURRENT_VERSION=$CURRENT_VERSION"
+          if [ "$CURRENT_VERSION" != "${{ env.LATEST_VERSION }}" ]; then
+            echo "update_needed=true" >> $GITHUB_ENV
+          else
+            echo "update_needed=false" >> $GITHUB_ENV
+
+      - name: Update PKGBUILD
+        if: env.update_needed == 'true'
+        run: |
+          cd ${{ matrix.repo }}
+          echo "Updating PKGBUILD to version $LATEST_VERSION..."
           sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
-          echo "Generating sha256sums..."
+
+      - name: Generate sha256sums
+        if: env.update_needed == 'true'
+        run: |
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
-          wget "$X86_64_URL"
+          wget -q "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
           ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
-          wget "$ARM64_URL"
+          wget -q "$ARM64_URL"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
-          echo X86_64_SHA256SUM=$X86_64_SHA256SUM
-          echo ARM64_SHA256SUM=$ARM64_SHA256SUM
+          echo "X86_64_SHA256SUM=$X86_64_SHA256SUM"
+          echo "ARM64_SHA256SUM=$ARM64_SHA256SUM"
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
-          echo "Committing changes..."
+
+      - name: Commit changes
+        if: env.update_needed == 'true'
+        run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD
-          git commit -m "update ${{matrix.repo}} to $LATEST_VERSION"
+          git commit -m "update ${{ matrix.repo }} to $LATEST_VERSION"
           git push origin ${GITHUB_REF##*/}
 
       - name: Publish AUR package
-        if: $(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-) != ${{env.LATEST_VERSION}}
+        if: env.update_needed == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
-          pkgname: ${{matrix.repo}}
+          pkgname: ${{ matrix.repo }}
           test: false
           updpkgsums: false
           commit_username: "github-actions[bot]"
@@ -58,7 +74,8 @@ jobs:
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "git actions auto update"
           allow_empty_commits: false
-          pkgbuild: ${{matrix.repo}}/PKGBUILD
+          pkgbuild: ${{ matrix.repo }}/PKGBUILD
           assets: |
-            ${{matrix.repo}}/v2rayN-bin.desktop
-            ${{matrix.repo}}/v2rayN.png
+            ${{ matrix.repo }}/v2rayN-bin.desktop
+            ${{ matrix.repo }}/v2rayN.png
+
