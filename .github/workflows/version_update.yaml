@@ -35,6 +35,8 @@ jobs:
           ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
           wget "$ARM64_URL"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
+          echo X86_64_SHA256SUM=$X86_64_SHA256SUM
+          echo ARM64_SHA256SUM=$ARM64_SHA256SUM
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
           echo "Committing changes..."
