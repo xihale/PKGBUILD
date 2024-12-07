@@ -8,6 +8,8 @@ on:
 jobs:
   update-and-publish:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
     strategy:
       matrix:
         repo: [v2rayn-bin]
@@ -58,19 +60,25 @@ jobs:
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
 
-      - name: Publish AUR package
+      - name: Push changes to AUR
         if: ${{ env.skip != 'true' }}
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
-        with:
-          pkgname: ${{ matrix.repo }}
-          test: false
-          updpkgsums: false
-          commit_username: "github-actions[bot]"
-          commit_email: "github-actions[bot]@users.noreply.github.com"
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "git actions auto update"
-          allow_empty_commits: false
-          pkgbuild: ${{ matrix.repo }}/PKGBUILD
-          assets: |
-            ${{ matrix.repo }}/v2rayN-bin.desktop
-            ${{ matrix.repo }}/v2rayN.png
+        run: |
+          cd ${{ matrix.repo }}
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          echo "Host aur.archlinux.org" >> ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/aur" >> ~/.ssh/config
+          echo "  User aur" >> ~/.ssh/config
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+    
+          makepkg --printsrcinfo > .SRCINFO
+          makepkg
+          makepkg --install
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "release $VERSION"
+          git push origin master
+
