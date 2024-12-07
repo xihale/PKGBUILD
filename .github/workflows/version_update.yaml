@@ -31,6 +31,7 @@ jobs:
             echo "update_needed=true" >> $GITHUB_ENV
           else
             echo "update_needed=false" >> $GITHUB_ENV
+          fi
 
       - name: Update PKGBUILD
         if: env.update_needed == 'true'
