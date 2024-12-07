@@ -17,6 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git
 
       - name: Checkout code
         uses: actions/checkout@v3
