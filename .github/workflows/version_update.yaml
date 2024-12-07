@@ -32,11 +32,9 @@ jobs:
             X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
             X86_64_SHA256SUM=$(curl -s "$X86_64_URL" | sha256sum | cut -d ' ' -f 1)
             ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
-            ARM64_SHA256SUM="SKIP"
-            sed -i "/^source_x86_64=/a source_x86_64=($X86_64_URL)" PKGBUILD
-            sed -i "/^sha256sums_x86_64=/a sha256sums_x86_64=($X86_64_SHA256SUM)" PKGBUILD
-            sed -i "/^source_arm64=/a source_arm64=($ARM64_URL)" PKGBUILD
-            sed -i "/^sha256sums_arm64=/a sha256sums_arm64=($ARM64_SHA256SUM)" PKGBUILD
+            ARM64_SHA256SUM=$(curl -s "$ARM64_URL" | sha256sum | cut -d ' ' -f 1)
+            sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
+            sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
             echo "Committing changes..."
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
