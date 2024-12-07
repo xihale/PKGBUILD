@@ -24,7 +24,7 @@ jobs:
           test: false
           updpkgsums: false
           commit_username: "github-actions[bot]"
-          commit_email: "xihale.top@qq.com" # "41898282+github-actions[bot]@users.noreply.github.com"
+          commit_email: "github-actions[bot]@users.noreply.github.com"
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "git actions auto update"
           allow_empty_commits: false
