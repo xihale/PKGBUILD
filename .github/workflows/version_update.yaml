@@ -8,16 +8,10 @@ on:
 jobs:
   update-and-publish:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
     strategy:
       matrix:
         repo: [v2rayn-bin]
     steps:
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base sudo wget git pacman-contrib openssh devtools fakeroot debugedit
 
       - name: Checkout code
         uses: actions/checkout@v3
@@ -37,7 +31,7 @@ jobs:
         run: |
           cd ${{ matrix.repo }}
           CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
-          if [ "$CURRENT_VERSION" == "${{ env.LATEST_VERSION }}" ]; then
+          if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.LATEST_VERSION }}" ]; then
             echo "Update is not needed."
             echo "skip=true" >> "$GITHUB_ENV"
           fi
@@ -64,31 +58,21 @@ jobs:
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
 
-      - name: Push changes to AUR
+      
+      - name: Publish AUR package
         if: ${{ steps.check-update.outputs.skip != 'true' }}
-        run: |
-          cd ${{ matrix.repo }}
-          useradd -m builder && \
-          echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-          echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-          usermod -a -G wheel builder
-          export HOME=/home/builder
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: ${{matrix.repo}}
+          test: false
+          updpkgsums: false
+          commit_username: "github-actions[bot]"
+          commit_email: "github-actions[bot]@users.noreply.github.com"
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "release ${{ steps.get-latest-version.outputs.LATEST_VERSION }}"
+          allow_empty_commits: false
+          pkgbuild: ${{matrix.repo}}/PKGBUILD
+          assets: |
+            ${{matrix.repo}}/v2rayN-bin.desktop
+            ${{matrix.repo}}/v2rayN.png
 
-          mkdir -p "$HOME/.ssh"
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > "$HOME/.ssh/aur"
-          chmod 600 "$HOME/.ssh/aur"
-          echo "Host aur.archlinux.org" >> "$HOME/.ssh/config"
-          echo "  IdentityFile $HOME/.ssh/aur" >> "$HOME/.ssh/config"
-          echo "  User aur" >> "$HOME/.ssh/config"
-          ssh-keyscan -H aur.archlinux.org >> "$HOME/.ssh/known_hosts"
-
-          chown -R builder:builder .
-
-          sudo -u builder -H sh -c 'makepkg --printsrcinfo > .SRCINFO'
-          sudo -u builder -H makepkg -sf si
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add PKGBUILD .SRCINFO
-          git commit -m "release $VERSION"
-          git push origin master
