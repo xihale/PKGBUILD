@@ -24,7 +24,7 @@ jobs:
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
-          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
+          echo "::set-output name=LATEST_VERSION::$LATEST_VERSION"
 
       - name: Check if update is needed
         id: check-update
@@ -33,7 +33,7 @@ jobs:
           CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
           if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.LATEST_VERSION }}" ]; then
             echo "Update is not needed."
-            echo "skip=true" >> "$GITHUB_ENV"
+            echo "::set-output name=skip::true"
           fi
 
       - name: Update PKGBUILD
