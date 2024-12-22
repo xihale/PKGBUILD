@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base wget git pacman-contrib openssh
+          pacman -S --noconfirm base sudo wget git pacman-contrib openssh devtools fakeroot debugedit
 
       - name: Checkout code
         uses: actions/checkout@v3
@@ -37,21 +37,20 @@ jobs:
         run: |
           cd ${{ matrix.repo }}
           CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
-          echo "CURRENT_VERSION=$CURRENT_VERSION"
           if [ "$CURRENT_VERSION" == "${{ env.LATEST_VERSION }}" ]; then
             echo "Update is not needed."
             echo "skip=true" >> "$GITHUB_ENV"
           fi
 
       - name: Update PKGBUILD
-        if: ${{ env.skip != 'true' }}
+        if: ${{ steps.check-update.outputs.skip != 'true' }}
         run: |
           cd ${{ matrix.repo }}
           echo "Updating PKGBUILD to version $LATEST_VERSION..."
           sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
 
       - name: Generate sha256sums
-        if: ${{ env.skip != 'true' }}
+        if: ${{ steps.check-update.outputs.skip != 'true' }}
         run: |
           cd ${{ matrix.repo }}
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
@@ -66,24 +65,30 @@ jobs:
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
 
       - name: Push changes to AUR
-        if: ${{ env.skip != 'true' }}
+        if: ${{ steps.check-update.outputs.skip != 'true' }}
         run: |
           cd ${{ matrix.repo }}
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          echo "Host aur.archlinux.org" >> ~/.ssh/config
-          echo "  IdentityFile ~/.ssh/aur" >> ~/.ssh/config
-          echo "  User aur" >> ~/.ssh/config
-          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
-    
-          makepkg --printsrcinfo > .SRCINFO
-          makepkg
-          makepkg --install
+          useradd -m builder && \
+          echo "builder ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+          echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+          usermod -a -G wheel builder
+          export HOME=/home/builder
+
+          mkdir -p "$HOME/.ssh"
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > "$HOME/.ssh/aur"
+          chmod 600 "$HOME/.ssh/aur"
+          echo "Host aur.archlinux.org" >> "$HOME/.ssh/config"
+          echo "  IdentityFile $HOME/.ssh/aur" >> "$HOME/.ssh/config"
+          echo "  User aur" >> "$HOME/.ssh/config"
+          ssh-keyscan -H aur.archlinux.org >> "$HOME/.ssh/known_hosts"
+
+          chown -R builder:builder .
+
+          sudo -u builder -H sh -c 'makepkg --printsrcinfo > .SRCINFO'
+          sudo -u builder -H makepkg -sf si
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD .SRCINFO
           git commit -m "release $VERSION"
           git push origin master
-
