@@ -24,29 +24,29 @@ jobs:
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
-          echo "::set-output name=LATEST_VERSION::$LATEST_VERSION"
+          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
 
       - name: Check if update is needed
         id: check-update
         run: |
+          echo $LATEST_VERSION
           cd ${{ matrix.repo }}
           CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
-          if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.LATEST_VERSION }}" ]; then
+          if [ "$CURRENT_VERSION" == "$LATEST_VERSION" ]; then
             echo "Update is not needed."
-            echo "::set-output name=skip::true"
+            echo "skip=true" >> $GITHUB_ENV
           fi
 
       - name: Update PKGBUILD
-        if: ${{ steps.check-update.outputs.skip != 'true' }}
+        if: ${{ env.skip != 'true' }}
         run: |
           cd ${{ matrix.repo }}
           echo "Updating PKGBUILD to version $LATEST_VERSION..."
           sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
 
       - name: Generate sha256sums
-        if: ${{ steps.check-update.outputs.skip != 'true' }}
+        if: ${{ env.skip != 'true' }}
         run: |
-          cd ${{ matrix.repo }}
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
           wget -q "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
@@ -60,14 +60,14 @@ jobs:
 
       
       - name: Publish AUR package
-        if: ${{ steps.check-update.outputs.skip != 'true' }}
+        if: ${{ env.skip != 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
           pkgname: ${{matrix.repo}}
           commit_username: "github-actions[bot]"
           commit_email: "github-actions[bot]@users.noreply.github.com"
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "release ${{ steps.get-latest-version.outputs.LATEST_VERSION }}"
+          commit_message: "release $LATEST_VERSION"
           allow_empty_commits: false
           pkgbuild: ${{matrix.repo}}/PKGBUILD
           assets: |
