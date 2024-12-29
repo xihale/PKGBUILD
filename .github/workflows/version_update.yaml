@@ -45,6 +45,7 @@ jobs:
       - name: Generate sha256sums
         if: ${{ env.skip != 'true' }}
         run: |
+          cd ${{ matrix.repo }}
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
           wget -q "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
