@@ -23,7 +23,6 @@ jobs:
         id: get-latest-version
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
-          echo "RELEASE_INFO=$RELEASE_INFO" >> $GITHUB_ENV
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
           echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
 
