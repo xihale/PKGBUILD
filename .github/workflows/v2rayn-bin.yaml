@@ -24,7 +24,7 @@ jobs:
       - name: Check if update is needed
         id: check-update
         run: |
-          AUR_INFO=$(curl -s https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin)
+          AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
           CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
           echo "CURRENT_VERSION=$CURRENT_VERSION LATEST_VERSION=${{ steps.get-latest-version.outputs.latest_version }}"
           if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
