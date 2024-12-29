@@ -8,50 +8,54 @@ on:
     types: [release]
 
 jobs:
-  update-and-publish:
+  check-update:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        repo: [v2rayn-bin]
+    outputs:
+      skip: ${{ steps.check-update.outputs.skip }}
+      latest_version: ${{ steps.get-latest-version.outputs.latest_version }}
     steps:
-
-      - name: Checkout code
-        run: 
-          git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 ${{ matrix.repo }}
-
       - name: Get latest version
         id: get-latest-version
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
-          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
+          echo "::set-output name=latest_version::$LATEST_VERSION"
 
       - name: Check if update is needed
         id: check-update
         run: |
-          cd ${{ matrix.repo }}
-          CURRENT_VERSION=$(grep '^pkgver=' PKGBUILD | cut -d '=' -f 2-)
-          echo "CURRENT_VERSION=$CURRENT_VERSION LATEST_VERSION=${{ env.LATEST_VERSION }}"
-          if [ "$CURRENT_VERSION" == "${{ env.LATEST_VERSION }}" ]; then
+          AUR_INFO=$(curl -s https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin)
+          CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
+          echo "CURRENT_VERSION=$CURRENT_VERSION LATEST_VERSION=${{ steps.get-latest-version.outputs.latest_version }}"
+          if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
             echo "Update is not needed."
-            echo "skip=true" >> $GITHUB_ENV
+            echo "::set-output name=skip::true"
+          else
+            echo "::set-output name=skip::false"
           fi
 
+  update-and-publish:
+    runs-on: ubuntu-latest
+    needs: check-update
+    if: needs.check-update.outputs.skip != 'true'
+    steps:
+      - name: Checkout code
+        run: 
+          git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 v2rayn-bin
+
       - name: Update PKGBUILD
-        if: env.skip != 'true'
         run: |
-          cd ${{ matrix.repo }}
-          echo "Updating PKGBUILD to version ${{ env.LATEST_VERSION }}..."
-          sed -i "s/^pkgver=.*/pkgver=${{ env.LATEST_VERSION }}/" PKGBUILD
+          cd v2rayn-bin
+          echo "Updating PKGBUILD to version ${{ needs.check-update.outputs.latest_version }}..."
+          sed -i "s/^pkgver=.*/pkgver=${{ needs.check-update.outputs.latest_version }}/" PKGBUILD
 
       - name: Generate sha256sums
-        if: env.skip != 'true'
         run: |
-          cd ${{ matrix.repo }}
-          X86_64_URL="https://github.com/2dust/v2rayN/releases/download/${{ env.LATEST_VERSION }}/v2rayN-linux-64.zip"
+          cd v2rayn-bin
+          X86_64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-64.zip"
           wget -q "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
-          ARM64_URL="https://github.com/2dust/v2rayN/releases/download/${{ env.LATEST_VERSION }}/v2rayN-linux-arm64.zip"
+          ARM64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-arm64.zip"
           wget -q "$ARM64_URL"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
           echo "X86_64_SHA256SUM=$X86_64_SHA256SUM"
@@ -59,19 +63,17 @@ jobs:
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
 
-      
       - name: Publish AUR package
-        if: env.skip != 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
-          pkgname: ${{matrix.repo}}
+          pkgname: v2rayn-bin
           commit_username: "github-actions[bot]"
           commit_email: "github-actions[bot]@users.noreply.github.com"
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "release ${{ env.LATEST_VERSION }}"
+          commit_message: "release ${{ needs.check-update.outputs.latest_version }}"
           allow_empty_commits: false
-          pkgbuild: ${{matrix.repo}}/PKGBUILD
+          pkgbuild: v2rayn-bin/PKGBUILD
           assets: |
-            ${{matrix.repo}}/v2rayN-bin.desktop
-            ${{matrix.repo}}/v2rayN.png
+            v2rayn-bin/v2rayN-bin.desktop
+            v2rayn-bin/v2rayN.png
 
