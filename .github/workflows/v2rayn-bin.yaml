@@ -19,20 +19,18 @@ jobs:
         run: |
           RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
-          echo "::set-output name=latest_version::$LATEST_VERSION"
+          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_ENV
 
       - name: Check if update is needed
         id: check-update
         run: |
           AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
           CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
-          echo "CURRENT_VERSION=$CURRENT_VERSION LATEST_VERSION=${{ steps.get-latest-version.outputs.latest_version }}"
-          if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
-            echo "Update is not needed."
-            echo "::set-output name=skip::true"
+          echo "CURRENT_VERSION=$CURRENT_VERSION LATEST_VERSION=$LATEST_VERSION"
+          if [ "$CURRENT_VERSION" == "$LATEST_VERSION" ]; then
+            echo "skip=true" >> $GITHUB_ENV
           else
-            echo "::set-output name=skip::false"
-          fi
+            echo "skip=false" >> $GITHUB_ENV
 
   update-and-publish:
     runs-on: ubuntu-latest
@@ -46,16 +44,16 @@ jobs:
       - name: Update PKGBUILD
         run: |
           cd v2rayn-bin
-          echo "Updating PKGBUILD to version ${{ needs.check-update.outputs.latest_version }}..."
-          sed -i "s/^pkgver=.*/pkgver=${{ needs.check-update.outputs.latest_version }}/" PKGBUILD
+          echo "Updating PKGBUILD to version $LATEST_VERSION..."
+          sed -i "s/^pkgver=.*/pkgver=$LATEST_VERSION/" PKGBUILD
 
       - name: Generate sha256sums
         run: |
           cd v2rayn-bin
-          X86_64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-64.zip"
+          X86_64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-64.zip"
           wget -q "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
-          ARM64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-arm64.zip"
+          ARM64_URL="https://github.com/2dust/v2rayN/releases/download/$LATEST_VERSION/v2rayN-linux-arm64.zip"
           wget -q "$ARM64_URL"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
           echo "X86_64_SHA256SUM=$X86_64_SHA256SUM"
@@ -70,7 +68,7 @@ jobs:
           commit_username: "github-actions[bot]"
           commit_email: "github-actions[bot]@users.noreply.github.com"
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "release ${{ needs.check-update.outputs.latest_version }}"
+          commit_message: "release ${{ env.LATEST_VERSION }}"
           allow_empty_commits: false
           pkgbuild: v2rayn-bin/PKGBUILD
           assets: |
