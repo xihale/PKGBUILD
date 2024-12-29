@@ -14,10 +14,8 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          submodules: recursive
+        run: 
+          git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 ${{ matrix.repo }}
 
       - name: Get latest version
         id: get-latest-version
