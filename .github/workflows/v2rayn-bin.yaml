@@ -31,6 +31,7 @@ jobs:
             echo "skip=true" >> $GITHUB_ENV
           else
             echo "skip=false" >> $GITHUB_ENV
+fi
 
   update-and-publish:
     runs-on: ubuntu-latest
