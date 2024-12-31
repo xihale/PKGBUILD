@@ -36,7 +36,7 @@ jobs:
   update-and-publish:
     runs-on: ubuntu-latest
     needs: check-update
-    if: needs.check-update.outputs.skip != 'true'
+    if: env.skip != 'true'
     steps:
       - name: Checkout code
         run: 
