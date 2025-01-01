@@ -1,4 +1,4 @@
-name: Update v2rayN version and publish to AUR
+name: v2rayn-bin
 
 on:
   schedule:
