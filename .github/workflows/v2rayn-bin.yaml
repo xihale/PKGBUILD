@@ -27,7 +27,7 @@ jobs:
           AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
           CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
           echo "Current version: $CURRENT_VERSION"
-          echo "Latest version: $LATEST_VERSION"
+          echo "Latest version: ${{ steps.get-latest-version.outputs.latest_version }}"
           if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
             echo "Update is not needed."
             echo "skip=true" >> $GITHUB_OUTPUT
