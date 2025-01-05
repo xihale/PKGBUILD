@@ -34,6 +34,7 @@ jobs:
           else
             echo "Update is needed."
             echo "skip=false" >> $GITHUB_OUTPUT
+          fi
     outputs:
       skip: ${{ steps.check-update.outputs.skip }}
       latest_version: ${{ steps.get-latest-version.outputs.latest_version }}
