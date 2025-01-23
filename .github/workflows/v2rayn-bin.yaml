@@ -54,6 +54,7 @@ jobs:
           echo "Updating PKGBUILD to version ${{ needs.check-update.outputs.latest_version }}..."
           cd v2rayn-bin
           sed -i "s/^pkgver=.*/pkgver=${{ needs.check-update.outputs.latest_version }}/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1" PKGBUILD
           echo "PKGBUILD updated."
 
       - name: Generate sha256sums
