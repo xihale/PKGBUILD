@@ -15,7 +15,7 @@ jobs:
         id: get-latest-version
         run: |
           echo "Fetching the latest version from GitHub releases..."
-          RELEASE_INFO=$(curl -s https://api.github.com/repos/2dust/v2rayN/releases/latest)
+          RELEASE_INFO=$(curl -s --retry 3 --retry-delay 2 https://api.github.com/repos/2dust/v2rayN/releases/latest)
           LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
           echo "Latest version fetched: $LATEST_VERSION"
           echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
@@ -24,7 +24,7 @@ jobs:
         id: check-update
         run: |
           echo "Checking if update is needed..."
-          AUR_INFO=$(curl -s "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
+          AUR_INFO=$(curl -s --retry 3 --retry-delay 2 "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
           CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
           echo "Current version: $CURRENT_VERSION"
           echo "Latest version: ${{ steps.get-latest-version.outputs.latest_version }}"
