@@ -13,10 +13,18 @@ jobs:
     steps:
       - name: Get latest version
         id: get-latest-version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Fetching the latest version from GitHub releases..."
-          RELEASE_INFO=$(curl -s --retry 3 --retry-delay 2 https://api.github.com/repos/2dust/v2rayN/releases/latest)
-          LATEST_VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | cut -d '"' -f 4)
+          RELEASE_INFO=$(curl -s --retry 3 --retry-delay 2 -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/2dust/v2rayN/releases/latest)
+          LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r .tag_name)
+          
+          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
+            echo "Error: Failed to fetch latest version. Response: $RELEASE_INFO"
+            exit 1
+          fi
+          
           echo "Latest version fetched: $LATEST_VERSION"
           echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
 
@@ -26,8 +34,16 @@ jobs:
           echo "Checking if update is needed..."
           AUR_INFO=$(curl -s --retry 3 --retry-delay 2 "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
           CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
+          
+          # Check if CURRENT_VERSION is valid
+          if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" == "null" ]; then
+             echo "Warning: Could not fetch current AUR version. Assuming update is needed."
+             CURRENT_VERSION="0.0.0"
+          fi
+          
           echo "Current version: $CURRENT_VERSION"
           echo "Latest version: ${{ steps.get-latest-version.outputs.latest_version }}"
+          
           if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
             echo "Update is not needed."
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -61,16 +77,26 @@ jobs:
         run: |
           echo "Generating sha256sums..."
           cd v2rayn-bin
+          
+          # Download x86_64
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-64.zip"
-          wget -q "$X86_64_URL"
+          curl -fL -o v2rayN-linux-64.zip "$X86_64_URL"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
           echo "X86_64_SHA256SUM=$X86_64_SHA256SUM"
+          
+          # Download arm64
           ARM64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-arm64.zip"
-          wget -q "$ARM64_URL"
+          curl -fL -o v2rayN-linux-arm64.zip "$ARM64_URL"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
           echo "ARM64_SHA256SUM=$ARM64_SHA256SUM"
+          
+          # Update PKGBUILD
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
           sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
+          
+          # Cleanup downloaded files
+          rm v2rayN-linux-64.zip v2rayN-linux-arm64.zip
+          
           echo "sha256sums generated and updated in PKGBUILD."
 
       - name: Publish AUR package
