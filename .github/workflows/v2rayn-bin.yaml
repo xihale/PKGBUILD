@@ -32,12 +32,25 @@ jobs:
         id: check-update
         run: |
           echo "Checking if update is needed..."
-          AUR_INFO=$(curl -s --retry 3 --retry-delay 2 "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin" || echo '{}')
-          CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version // empty' | cut -d '-' -f 1)
-          
+          CURRENT_VERSION=""
+          for i in 1 2 3; do
+            AUR_INFO=$(curl -sSf --max-time 30 "https://aur.archlinux.org/rpc/v5/info/v2rayn-bin" 2>&1)
+            CURL_EXIT=$?
+            if [ $CURL_EXIT -ne 0 ]; then
+              echo "Attempt $i: curl failed (exit $CURL_EXIT): $AUR_INFO"
+            else
+              CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version // empty' | cut -d '-' -f 1)
+              if [ -n "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" != "null" ]; then
+                break
+              fi
+              echo "Attempt $i: Unexpected AUR response: $AUR_INFO"
+            fi
+            [ "$i" -lt 3 ] && sleep 5
+          done
+
           # Check if CURRENT_VERSION is valid
           if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" == "null" ]; then
-             echo "Warning: Could not fetch current AUR version. Assuming update is needed."
+             echo "Warning: Could not fetch current AUR version after 3 attempts. Assuming update is needed."
              CURRENT_VERSION="0.0.0"
           fi
           
