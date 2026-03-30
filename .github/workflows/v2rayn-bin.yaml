@@ -2,7 +2,7 @@ name: v2rayn-bin
 
 on:
   schedule:
-    - cron: 0 * * * * # 每小时运行一次
+    - cron: 0 */8 * * *
   workflow_dispatch:
   repository_dispatch:
     types: [release]
@@ -13,24 +13,32 @@ jobs:
     steps:
       - name: Get latest version
         id: get-latest-version
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           echo "Fetching the latest version from GitHub releases..."
-          RELEASE_INFO=$(curl -s --retry 3 --retry-delay 2 -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/2dust/v2rayN/releases/latest)
-          LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r .tag_name)
-          
-          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
-            echo "Error: Failed to fetch latest version. Response: $RELEASE_INFO"
-            exit 1
-          fi
-          
-          echo "Latest version fetched: $LATEST_VERSION"
-          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          for i in 1 2 3; do
+            RELEASE_INFO=$(curl -s --retry 3 --retry-delay 2 -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/2dust/v2rayN/releases/latest)
+            LATEST_VERSION=$(echo "$RELEASE_INFO" | jq -r .tag_name | sed 's/^v//')
+            
+            if [ -n "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "null" ]; then
+              echo "Latest version fetched: $LATEST_VERSION"
+              echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Attempt $i: Failed to fetch version or got unexpected response. Response: $RELEASE_INFO"
+            [ "$i" -lt 3 ] && sleep 10
+          done
+          echo "Error: Failed to fetch latest version after 3 attempts."
+          exit 1
 
       - name: Check if update is needed
         id: check-update
+        shell: bash
         run: |
+          set -e
           echo "Checking if update is needed..."
           CURRENT_VERSION=""
           for i in 1 2 3; do
@@ -45,7 +53,7 @@ jobs:
               fi
               echo "Attempt $i: Unexpected AUR response: $AUR_INFO"
             fi
-            [ "$i" -lt 3 ] && sleep 5
+            [ "$i" -lt 3 ] && sleep 10
           done
 
           # Check if CURRENT_VERSION is valid
@@ -53,10 +61,10 @@ jobs:
              echo "Warning: Could not fetch current AUR version after 3 attempts. Assuming update is needed."
              CURRENT_VERSION="0.0.0"
           fi
-          
+
           echo "Current version: $CURRENT_VERSION"
           echo "Latest version: ${{ steps.get-latest-version.outputs.latest_version }}"
-          
+
           if [ "$CURRENT_VERSION" == "${{ steps.get-latest-version.outputs.latest_version }}" ]; then
             echo "Update is not needed."
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -74,13 +82,17 @@ jobs:
     if: ${{ needs.check-update.outputs.skip != 'true' }}
     steps:
       - name: Checkout code
+        shell: bash
         run: |
+          set -e
           echo "Cloning AUR repository..."
           for i in 1 2 3; do
-            git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 v2rayn-bin && break
+            if git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 v2rayn-bin; then
+              exit 0
+            fi
             if [ "$i" -lt 3 ]; then
               echo "Attempt $i failed, waiting before next attempt..."
-              sleep 10
+              sleep 20
             else
               echo "All clone attempts failed."
               exit 1
@@ -88,7 +100,9 @@ jobs:
           done
 
       - name: Update PKGBUILD
+        shell: bash
         run: |
+          set -e
           echo "Updating PKGBUILD to version ${{ needs.check-update.outputs.latest_version }}..."
           cd v2rayn-bin
           sed -i "s/^pkgver=.*/pkgver=${{ needs.check-update.outputs.latest_version }}/" PKGBUILD
@@ -96,29 +110,46 @@ jobs:
           echo "PKGBUILD updated."
 
       - name: Generate sha256sums
+        shell: bash
         run: |
+          set -e
           echo "Generating sha256sums..."
           cd v2rayn-bin
-          
+
+          # Function to download with retry
+          download_with_retry() {
+            local url=$1
+            local output=$2
+            for i in 1 2 3; do
+              echo "Downloading $url (Attempt $i)..."
+              if curl -fL --retry 3 --retry-delay 5 -o "$output" "$url"; then
+                return 0
+              fi
+              echo "Attempt $i failed, waiting before next attempt..."
+              [ "$i" -lt 3 ] && sleep 15
+            done
+            return 1
+          }
+
           # Download x86_64
           X86_64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-64.zip"
-          curl -fL -o v2rayN-linux-64.zip "$X86_64_URL"
+          download_with_retry "$X86_64_URL" "v2rayN-linux-64.zip"
           X86_64_SHA256SUM=$(sha256sum v2rayN-linux-64.zip | cut -d ' ' -f 1)
           echo "X86_64_SHA256SUM=$X86_64_SHA256SUM"
-          
+
           # Download arm64
           ARM64_URL="https://github.com/2dust/v2rayN/releases/download/${{ needs.check-update.outputs.latest_version }}/v2rayN-linux-arm64.zip"
-          curl -fL -o v2rayN-linux-arm64.zip "$ARM64_URL"
+          download_with_retry "$ARM64_URL" "v2rayN-linux-arm64.zip"
           ARM64_SHA256SUM=$(sha256sum v2rayN-linux-arm64.zip | cut -d ' ' -f 1)
           echo "ARM64_SHA256SUM=$ARM64_SHA256SUM"
-          
+
           # Update PKGBUILD
           sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$X86_64_SHA256SUM')/" PKGBUILD
-          sed -i "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('$ARM64_SHA256SUM')/" PKGBUILD
-          
+          sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=('$ARM64_SHA256SUM')/" PKGBUILD
+
           # Cleanup downloaded files
           rm v2rayN-linux-64.zip v2rayN-linux-arm64.zip
-          
+
           echo "sha256sums generated and updated in PKGBUILD."
 
       - name: Publish AUR package
