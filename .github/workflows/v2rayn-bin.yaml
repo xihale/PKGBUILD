@@ -63,7 +63,16 @@ jobs:
       - name: Checkout code
         run: |
           echo "Cloning AUR repository..."
-          git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 v2rayn-bin
+          for i in 1 2 3; do
+            git clone https://aur.archlinux.org/v2rayn-bin.git --depth=1 v2rayn-bin && break
+            if [ "$i" -lt 3 ]; then
+              echo "Attempt $i failed, waiting before next attempt..."
+              sleep 10
+            else
+              echo "All clone attempts failed."
+              exit 1
+            fi
+          done
 
       - name: Update PKGBUILD
         run: |
@@ -101,6 +110,10 @@ jobs:
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: "url.ssh://aur@aur.archlinux.org/.insteadOf"
+          GIT_CONFIG_VALUE_0: "https://aur.archlinux.org/"
         with:
           pkgname: v2rayn-bin
           commit_username: "github-actions[bot]"
