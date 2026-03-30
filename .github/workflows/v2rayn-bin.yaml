@@ -32,8 +32,8 @@ jobs:
         id: check-update
         run: |
           echo "Checking if update is needed..."
-          AUR_INFO=$(curl -s --retry 3 --retry-delay 2 "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin")
-          CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version' | cut -d '-' -f 1)
+          AUR_INFO=$(curl -s --retry 3 --retry-delay 2 "https://aur.archlinux.org/rpc/?v=5&type=info&arg[]=v2rayn-bin" || echo '{}')
+          CURRENT_VERSION=$(echo "$AUR_INFO" | jq -r '.results[0].Version // empty' | cut -d '-' -f 1)
           
           # Check if CURRENT_VERSION is valid
           if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" == "null" ]; then
@@ -91,8 +91,8 @@ jobs:
           echo "ARM64_SHA256SUM=$ARM64_SHA256SUM"
           
           # Update PKGBUILD
-          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=($X86_64_SHA256SUM)/" PKGBUILD
-          sed -i "s/^sha256sums_arm64=.*/sha256sums_arm64=($ARM64_SHA256SUM)/" PKGBUILD
+          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$X86_64_SHA256SUM')/" PKGBUILD
+          sed -i "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('$ARM64_SHA256SUM')/" PKGBUILD
           
           # Cleanup downloaded files
           rm v2rayN-linux-64.zip v2rayN-linux-arm64.zip
